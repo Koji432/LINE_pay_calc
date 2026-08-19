@@ -1,387 +1,502 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LINE集金アプリ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-    <!-- 👇 追加1: LINE連携（LIFF）を動かすための専用ツールを読み込みます -->
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LINE集金アプリ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body class="bg-gray-100 p-4 font-sans text-gray-800">
 
-    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 mt-4 relative">
+  <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 mt-4 relative min-h-[500px]">
 
-        <!-- 画面1：イベント作成画面（前回のまま変更なし） -->
-        <div id="create-event-screen" class="block">
-            <h2 class="text-xl font-bold mb-4 text-center text-blue-600">新しいイベントを作る</h2>
+    <!-- ローディング画面（LINEの確認中） -->
+    <div id="screen-loading" class="flex flex-col items-center justify-center h-64">
+      <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-4"></div>
+      <p class="text-gray-500 font-bold">LINEでログイン中...</p>
+    </div>
 
-            <div class="mb-4 text-center">
-                <label class="block text-gray-700 text-sm font-bold mb-2 text-left">アイコン</label>
-                <div class="flex justify-between gap-1 text-2xl">
-                    <label><input type="radio" name="event-icon" value="🍻" checked class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🍻</span></label>
-                    <label><input type="radio" name="event-icon" value="🍷" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🍷</span></label>
-                    <label><input type="radio" name="event-icon" value="🎡" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🎡</span></label>
-                    <label><input type="radio" name="event-icon" value="🎥" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🎥</span></label>
-                    <label><input type="radio" name="event-icon" value="🛒" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🛒</span></label>
-                    <label><input type="radio" name="event-icon" value="💰" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">💰</span></label>
-                </div>
-            </div>
+    <!-- ==========================================
+         画面0：マイページ（イベント一覧）
+         ========================================== -->
+    <div id="screen-list" class="hidden">
+      <div class="flex items-center gap-3 mb-6">
+        <img id="my-profile-img" src="" alt="icon" class="w-12 h-12 rounded-full border">
+        <h2 class="text-xl font-bold text-gray-800"><span id="my-profile-name"></span>のイベント</h2>
+      </div>
 
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">日付</label>
-                <input type="date" id="event-date-input" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">イベント名</label>
-                <input type="text" id="event-name-input" placeholder="例: 部署飲み会" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
+      <ul id="event-list" class="space-y-3 mb-6">
+        <!-- 過去に作ったイベントがここに並びます -->
+      </ul>
 
-            <div class="mb-4 p-3 bg-gray-50 rounded-lg border">
-                <label class="block text-gray-700 text-sm font-bold mb-2">集金モード</label>
-                <div class="flex flex-col gap-2">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="event-mode" value="individual" checked class="w-4 h-4 text-blue-600">
-                        <span class="text-sm">各自バラバラ (基本会費を設定)</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="event-mode" value="split" class="w-4 h-4 text-blue-600">
-                        <span class="text-sm">すべて割り勘 (全体の総額を設定)</span>
-                    </label>
-                </div>
-            </div>
+      <button id="go-create-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-4 rounded-xl transition duration-200 shadow-md">
+        ＋ 新しいイベントを作る
+      </button>
+    </div>
 
-            <div class="mb-8">
-                <label id="amount-label" class="block text-gray-700 text-sm font-bold mb-2">基本会費 (円)</label>
-                <div class="flex items-center">
-                    <button type="button" id="btn-dec-create" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl font-bold w-16 h-14 rounded-l-lg flex items-center justify-center transition">−</button>
-                    <input type="number" id="event-amount-input" class="w-full h-14 text-center text-xl font-bold border-y border-gray-200 focus:outline-none" value="4000">
-                    <button type="button" id="btn-inc-create" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl font-bold w-16 h-14 rounded-r-lg flex items-center justify-center transition">＋</button>
-                </div>
-            </div>
-
-            <button id="create-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-4 rounded-xl transition duration-200 shadow-md">
-                イベントを作成する
-            </button>
+    <!-- ==========================================
+         画面1：イベント作成画面
+         ========================================== -->
+    <div id="screen-create" class="hidden">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-blue-600">新規作成</h2>
+        <button id="back-to-list-from-create" class="text-gray-400 text-sm underline">一覧に戻る</button>
+      </div>
+      
+      <div class="mb-4 text-center">
+        <label class="block text-gray-700 text-sm font-bold mb-2 text-left">アイコン</label>
+        <div class="flex justify-between gap-1 text-2xl">
+          <label><input type="radio" name="event-icon" value="🍻" checked class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🍻</span></label>
+          <label><input type="radio" name="event-icon" value="🍷" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🍷</span></label>
+          <label><input type="radio" name="event-icon" value="🎡" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🎡</span></label>
+          <label><input type="radio" name="event-icon" value="🎥" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🎥</span></label>
+          <label><input type="radio" name="event-icon" value="🛒" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">🛒</span></label>
+          <label><input type="radio" name="event-icon" value="💰" class="hidden peer"><span class="cursor-pointer peer-checked:bg-blue-100 peer-checked:ring-2 ring-blue-500 rounded-lg p-2 transition">💰</span></label>
         </div>
+      </div>
 
-        <!-- 画面2：集金管理画面 -->
-        <div id="manage-event-screen" class="hidden">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2">日付</label>
+        <input type="date" id="event-date-input" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2">イベント名</label>
+        <input type="text" id="event-name-input" placeholder="例: 部署飲み会" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
 
-            <div class="flex items-center gap-3 mb-4 border-b pb-4">
-                <div id="display-event-icon" class="text-4xl bg-gray-100 p-2 rounded-xl">🍻</div>
+      <div class="mb-4 p-3 bg-gray-50 rounded-lg border">
+        <label class="block text-gray-700 text-sm font-bold mb-2">集金モード</label>
+        <div class="flex flex-col gap-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="event-mode" value="individual" checked class="w-4 h-4 text-blue-600">
+            <span class="text-sm">各自バラバラ (基本会費を設定)</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="radio" name="event-mode" value="split" class="w-4 h-4 text-blue-600">
+            <span class="text-sm">すべて割り勘 (全体の総額を設定)</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="mb-8">
+        <label id="amount-label" class="block text-gray-700 text-sm font-bold mb-2">基本会費 (円)</label>
+        <div class="flex items-center">
+          <button type="button" id="btn-dec-create" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl font-bold w-16 h-14 rounded-l-lg flex items-center justify-center transition">−</button>
+          <input type="number" id="event-amount-input" class="w-full h-14 text-center text-xl font-bold border-y border-gray-200 focus:outline-none" value="4000">
+          <button type="button" id="btn-inc-create" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl font-bold w-16 h-14 rounded-r-lg flex items-center justify-center transition">＋</button>
+        </div>
+      </div>
+
+      <button id="create-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-4 rounded-xl transition duration-200 shadow-md">
+        イベントを作成する
+      </button>
+    </div>
+
+    <!-- ==========================================
+         画面2：集金管理画面
+         ========================================== -->
+    <div id="screen-manage" class="hidden">
+      
+      <!-- ヘッダー（戻るボタンと設定ボタンを追加） -->
+      <div class="flex justify-between items-start mb-4 border-b pb-4">
+        <div class="flex items-center gap-3">
+          <button id="back-to-list-btn" class="text-gray-400 hover:text-gray-600 text-2xl mr-2">←</button>
+          <div id="display-event-icon" class="text-4xl bg-gray-100 p-2 rounded-xl">🍻</div>
+          <div>
+            <div id="display-event-date" class="text-xs text-gray-500 font-bold">日付</div>
+            <h2 id="display-event-title" class="text-xl font-bold text-gray-800">イベント名</h2>
+          </div>
+        </div>
+      </div>
+
+      <div id="status-box" class="bg-blue-50 p-4 rounded-xl mb-6 border border-blue-100 text-center transition-colors duration-500">
+        <div class="flex justify-between text-sm text-gray-600 mb-2 px-2">
+          <span>目標: <span id="display-target-amount" class="font-bold">0</span>円</span>
+          <span>集金済: <span id="display-paid-amount" class="font-bold">0</span>円</span>
+        </div>
+        <div class="text-sm font-bold text-gray-600 mt-2" id="remaining-label">残金</div>
+        <div id="display-remaining-amount" class="font-bold text-3xl text-blue-800 tracking-wider">0<span class="text-lg">円</span></div>
+      </div>
+      
+      <ul id="member-list" class="mb-6 space-y-3 mt-4">
+        <!-- 参加者がここに追加されます -->
+      </ul>
+
+      <!-- メンバー追加ボタン -->
+      <div class="flex gap-2 mb-4">
+        <button id="add-line-member-btn" class="flex-1 bg-[#06C755] hover:bg-green-600 text-white font-bold py-3 px-2 rounded-xl transition duration-200 shadow-md flex justify-center items-center gap-1 text-sm">
+          <span class="text-lg">💬</span> LINEで参加
+        </button>
+        <button id="show-add-modal-btn" class="flex-1 border-2 border-blue-500 text-blue-500 hover:bg-blue-50 font-bold py-3 px-2 rounded-xl transition duration-200 flex justify-center items-center gap-1 text-sm">
+          <span class="text-lg">＋</span> 手動で追加
+        </button>
+      </div>
+
+      <!-- 管理者専用アクション（共有と削除） -->
+      <div class="mt-6 flex gap-2">
+        <button id="share-btn" class="flex-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 rounded-xl shadow flex justify-center items-center gap-2">
+          🔗 リンクを共有
+        </button>
+        <!-- 削除ボタン（自分が作ったイベントの時だけ表示されます） -->
+        <button id="delete-event-btn" class="hidden flex-1 bg-gray-200 hover:bg-red-100 text-gray-600 hover:text-red-600 font-bold py-3 rounded-xl transition">
+          🗑️ 削除
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- モーダル（メンバー手動追加用）は変更なし -->
+  <div id="add-member-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity">
+    <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+      <h3 class="font-bold text-lg mb-4 text-center">手動でメンバーを追加</h3>
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2">名前</label>
+        <input type="text" id="modal-member-name" class="w-full px-3 py-3 border rounded-lg bg-gray-50">
+      </div>
+      <div id="modal-amount-area" class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2">金額 (円)</label>
+        <div class="flex items-center">
+          <button type="button" id="btn-dec-modal" class="bg-gray-200 text-gray-700 text-2xl font-bold w-14 h-12 rounded-l-lg">−</button>
+          <input type="number" id="modal-amount-input" class="w-full h-12 text-center text-lg font-bold border-y border-gray-200">
+          <button type="button" id="btn-inc-modal" class="bg-gray-200 text-gray-700 text-2xl font-bold w-14 h-12 rounded-r-lg">＋</button>
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <button id="modal-cancel-btn" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl">キャンセル</button>
+        <button id="modal-save-btn" class="flex-1 bg-blue-500 text-white font-bold py-3 rounded-xl shadow-md">追加する</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const liffId = "YOUR_LIFF_ID";
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let myLineProfile = null;   // 自分のLINE情報を保存する変数
+    let currentEventId = null;  // 現在開いているイベントのID
+    let currentEventData = null; 
+    let unsubscribe = null;     // リアルタイム監視をストップするための変数
+
+    // 画面の切り替えを簡単にする関数
+    function showScreen(screenId) {
+      document.getElementById('screen-loading').classList.add('hidden');
+      document.getElementById('screen-list').classList.add('hidden');
+      document.getElementById('screen-create').classList.add('hidden');
+      document.getElementById('screen-manage').classList.add('hidden');
+      
+      document.getElementById(screenId).classList.remove('hidden');
+    }
+
+    // --------------------------------------------------
+    // アプリの起動（LIFFログインと共有リンクの確認）
+    // --------------------------------------------------
+    liff.init({ liffId: liffId }).then(() => {
+      if (!liff.isLoggedIn()) {
+        liff.login(); // ログインしていなければLINEのログイン画面へ
+        return;
+      }
+      return liff.getProfile();
+    }).then(profile => {
+      if (!profile) return;
+      myLineProfile = profile; // 自分の情報を記憶
+      
+      // マイページに自分のアイコンと名前を表示
+      document.getElementById('my-profile-img').src = profile.pictureUrl || "";
+      document.getElementById('my-profile-name').textContent = profile.displayName;
+
+      // URLの中に「?eventId=...」が含まれているかチェック（共有機能用）
+      const params = new URLSearchParams(window.location.search);
+      const sharedEventId = params.get('eventId');
+      
+      if (sharedEventId) {
+        // 共有リンクから来た場合は、直接そのイベントの管理画面を開く
+        currentEventId = sharedEventId;
+        listenToEventChanges();
+        showScreen('screen-manage');
+      } else {
+        // 普通に開いた場合は、自分のイベント一覧（マイページ）を表示
+        loadMyEvents();
+        showScreen('screen-list');
+      }
+    });
+
+
+    // --------------------------------------------------
+    // 画面0：マイページ（イベント一覧の読み込み）
+    // --------------------------------------------------
+    function loadMyEvents() {
+      const eventList = document.getElementById('event-list');
+      eventList.innerHTML = "<p class='text-gray-500 text-sm text-center'>読み込み中...</p>";
+
+      // データベースから「作成者（ownerId）が自分」のイベントだけを探して持ってくる
+      db.collection("events")
+        .where("ownerId", "==", myLineProfile.userId) // ★他人のデータは見えない仕組み
+        .get()
+        .then((querySnapshot) => {
+          eventList.innerHTML = "";
+          if (querySnapshot.empty) {
+            eventList.innerHTML = "<p class='text-gray-500 text-sm text-center'>まだイベントがありません。<br>新しく作成しましょう！</p>";
+            return;
+          }
+
+          // 見つかったイベントをリストにして表示する
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const li = document.createElement("li");
+            li.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition";
+            li.innerHTML = `
+              <div class="flex items-center gap-3">
+                <div class="text-3xl">${data.icon || "🍻"}</div>
                 <div>
-                    <div id="display-event-date" class="text-xs text-gray-500 font-bold">2026-05-20</div>
-                    <h2 id="display-event-title" class="text-xl font-bold text-gray-800">イベント名</h2>
+                  <div class="text-xs text-gray-500">${data.date || "日付未定"}</div>
+                  <div class="font-bold text-gray-800">${data.title}</div>
                 </div>
-            </div>
-
-            <div id="status-box" class="bg-blue-50 p-4 rounded-xl mb-6 border border-blue-100 text-center transition-colors duration-500">
-                <div class="flex justify-between text-sm text-gray-600 mb-2 px-2">
-                    <span>目標: <span id="display-target-amount" class="font-bold">0</span>円</span>
-                    <span>集金済: <span id="display-paid-amount" class="font-bold">0</span>円</span>
-                </div>
-                <div class="text-sm font-bold text-gray-600 mt-2" id="remaining-label">残金</div>
-                <div id="display-remaining-amount" class="font-bold text-3xl text-blue-800 tracking-wider">0<span class="text-lg">円</span></div>
-            </div>
-
-            <ul id="member-list" class="mb-6 space-y-3 mt-4">
-                <!-- 参加者がここに追加されます -->
-            </ul>
-
-            <!-- 👇 追加2: メンバー追加ボタンを横並びの2つに分けました -->
-            <div class="flex gap-2 mb-4">
-                <button id="add-line-member-btn" class="flex-1 bg-[#06C755] hover:bg-green-600 text-white font-bold py-3 px-2 rounded-xl transition duration-200 shadow-md flex justify-center items-center gap-1 text-sm">
-                    <span class="text-lg">💬</span> LINEから参加
-                </button>
-                <button id="show-add-modal-btn" class="flex-1 border-2 border-blue-500 text-blue-500 hover:bg-blue-50 font-bold py-3 px-2 rounded-xl transition duration-200 flex justify-center items-center gap-1 text-sm">
-                    <span class="text-lg">＋</span> 手動で追加
-                </button>
-            </div>
-
-            <button id="back-btn" class="w-full text-gray-400 hover:text-gray-600 underline text-sm py-2">
-                ← 新規作成に戻る
-            </button>
-        </div>
-
-    </div>
-
-    <!-- 画面3：メンバー追加用の自作モーダル（前回のまま変更なし） -->
-    <div id="add-member-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity">
-        <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 class="font-bold text-lg mb-4 text-center">手動でメンバーを追加</h3>
-
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">名前</label>
-                <input type="text" id="modal-member-name" placeholder="例: 山田太郎" class="w-full px-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50">
-            </div>
-
-            <div id="modal-amount-area" class="mb-6">
-                <label class="block text-gray-700 text-sm font-bold mb-2">金額 (円)</label>
-                <div class="flex items-center">
-                    <button type="button" id="btn-dec-modal" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl font-bold w-14 h-12 rounded-l-lg flex items-center justify-center transition">−</button>
-                    <input type="number" id="modal-amount-input" class="w-full h-12 text-center text-lg font-bold border-y border-gray-200 focus:outline-none" value="0">
-                    <button type="button" id="btn-inc-modal" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-2xl font-bold w-14 h-12 rounded-r-lg flex items-center justify-center transition">＋</button>
-                </div>
-            </div>
-
-            <div class="flex gap-3">
-                <button id="modal-cancel-btn" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl">キャンセル</button>
-                <button id="modal-save-btn" class="flex-1 bg-blue-500 text-white font-bold py-3 rounded-xl shadow-md">追加する</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // 👇 ここをご自身のLINE Developersの「LIFF ID」に書き換えてください！
-        const liffId = "2011169299-y1PFn8L7";
-
-        // 👇 ここをご自身のFirebaseプロジェクトの設定に書き換えてください！
-        const firebaseConfig = {
-            apiKey: "AIzaSyDBFjspyXpnBThFGaN9dNeNTjkVK2WwsO4",
-            authDomain: "line-pay-app.firebaseapp.com",
-            projectId: "line-pay-app",
-            storageBucket: "line-pay-app.firebasestorage.app",
-            messagingSenderId: "1083776788993",
-            appId: "1:1083776788993:web:7b39c981709094a8ac2e00",
-            measurementId: "G-GFKBV4VLVD"
-        };
-
-        // Firebaseの初期化
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
-        // 👇 追加3: LINE（LIFF）の起動準備
-        liff.init({ liffId: liffId })
-            .then(() => {
-                console.log("LIFFの初期化に成功しました！");
-            })
-            .catch((err) => {
-                console.error("LIFFの初期化に失敗しました:", err);
+              </div>
+              <div class="text-gray-400 text-xl">〉</div>
+            `;
+            // リストをタップしたら、そのイベントの管理画面を開く
+            li.addEventListener('click', () => {
+              currentEventId = doc.id;
+              listenToEventChanges();
+              showScreen('screen-manage');
             });
-
-        let currentEventId = null;
-        let currentEventData = null;
-
-        // 金額の ＋ / − ボタンの仕組み
-        function setupNumberSpinner(decBtnId, incBtnId, inputId) {
-            const decBtn = document.getElementById(decBtnId);
-            const incBtn = document.getElementById(incBtnId);
-            const input = document.getElementById(inputId);
-
-            decBtn.addEventListener('click', () => {
-                let val = Number(input.value);
-                if (val >= 100) input.value = val - 100;
-            });
-            incBtn.addEventListener('click', () => {
-                let val = Number(input.value);
-                input.value = val + 100;
-            });
-        }
-        setupNumberSpinner('btn-dec-create', 'btn-inc-create', 'event-amount-input');
-        setupNumberSpinner('btn-dec-modal', 'btn-inc-modal', 'modal-amount-input');
-
-        const modeRadios = document.querySelectorAll('input[name="event-mode"]');
-        modeRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                document.getElementById('amount-label').textContent = e.target.value === 'split' ? '全体の総額 (円)' : '基本会費 (円)';
-            });
+            eventList.appendChild(li);
+          });
         });
+    }
 
-        // 1. イベント作成処理
-        document.getElementById('create-btn').addEventListener('click', () => {
-            const title = document.getElementById('event-name-input').value || "無題のイベント";
-            const date = document.getElementById('event-date-input').value || "日付未定";
-            const amount = Number(document.getElementById('event-amount-input').value);
-            const icon = document.querySelector('input[name="event-icon"]:checked').value;
-            const mode = document.querySelector('input[name="event-mode"]:checked').value;
-
-            if (amount <= 0) return alert("金額を正しく入力してください。");
-
-            db.collection("events").add({
-                title: title, date: date, baseAmount: amount, icon: icon, mode: mode,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(), members: []
-            }).then((docRef) => {
-                currentEventId = docRef.id;
-                document.getElementById('create-event-screen').classList.add('hidden');
-                document.getElementById('manage-event-screen').classList.remove('hidden');
-                listenToEventChanges();
-            });
-        });
+    document.getElementById('go-create-btn').addEventListener('click', () => showScreen('screen-create'));
+    document.getElementById('back-to-list-from-create').addEventListener('click', () => showScreen('screen-list'));
 
 
-        // 👇 追加4: 【超重要】データベースにメンバーを追加する共通の仕組み
-        // 手動追加でも、LINE追加でも、このプログラムを使って参加者を追加します。
-        function addMemberToDB(newId, name, amount, pictureUrl = null) {
-            let updatedMembers = [...(currentEventData.members || [])];
+    // --------------------------------------------------
+    // 画面1：イベント作成
+    // --------------------------------------------------
+    function setupNumberSpinner(decBtnId, incBtnId, inputId) {
+      const decBtn = document.getElementById(decBtnId);
+      const incBtn = document.getElementById(incBtnId);
+      const input = document.getElementById(inputId);
+      decBtn.addEventListener('click', () => { let val = Number(input.value); if (val >= 100) input.value = val - 100; });
+      incBtn.addEventListener('click', () => { let val = Number(input.value); input.value = val + 100; });
+    }
+    setupNumberSpinner('btn-dec-create', 'btn-inc-create', 'event-amount-input');
+    setupNumberSpinner('btn-dec-modal', 'btn-inc-modal', 'modal-amount-input');
 
-            // 同じIDの人がすでに参加しているかチェック（LINEで2回押しちゃった時などのエラー防止）
-            if (updatedMembers.some(m => m.id === newId)) {
-                alert("すでに参加しています！");
-                return;
-            }
+    const modeRadios = document.querySelectorAll('input[name="event-mode"]');
+    modeRadios.forEach(radio => radio.addEventListener('change', (e) => {
+        document.getElementById('amount-label').textContent = e.target.value === 'split' ? '全体の総額 (円)' : '基本会費 (円)';
+    }));
 
-            updatedMembers.push({
-                id: newId,
-                name: name,
-                amount: amount,
-                isPaid: false,
-                pictureUrl: pictureUrl // LINEのアイコンURLを保存！
-            });
+    document.getElementById('create-btn').addEventListener('click', () => {
+      const title = document.getElementById('event-name-input').value || "無題のイベント";
+      const date = document.getElementById('event-date-input').value || "日付未定";
+      const amount = Number(document.getElementById('event-amount-input').value);
+      const icon = document.querySelector('input[name="event-icon"]:checked').value;
+      const mode = document.querySelector('input[name="event-mode"]:checked').value;
 
-            // 割り勘モードの再計算
-            if (currentEventData.mode === 'split') {
-                const total = currentEventData.baseAmount;
-                const perPerson = Math.round(total / updatedMembers.length);
-                updatedMembers = updatedMembers.map(m => ({ ...m, amount: perPerson }));
-            }
+      if (amount <= 0) return alert("金額を正しく入力してください。");
 
-            db.collection("events").doc(currentEventId).update({ members: updatedMembers });
+      // データベースに保存。この時「ownerId」として自分のLINE IDを保存する！
+      db.collection("events").add({
+        ownerId: myLineProfile.userId, // ★作成者を記録
+        title: title, 
+        date: date, 
+        baseAmount: amount, 
+        icon: icon, 
+        mode: mode,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+        members: []
+      }).then((docRef) => {
+        currentEventId = docRef.id;
+        
+        // 作成後は入力欄をリセットしておく
+        document.getElementById('event-name-input').value = "";
+        
+        listenToEventChanges();
+        showScreen('screen-manage');
+      });
+    });
+
+
+    // --------------------------------------------------
+    // 画面2：集金管理画面（リアルタイム監視・削除・共有）
+    // --------------------------------------------------
+    function listenToEventChanges() {
+      // 以前の監視があれば一度止める
+      if (unsubscribe) unsubscribe();
+
+      unsubscribe = db.collection("events").doc(currentEventId).onSnapshot((doc) => {
+        if (!doc.exists) {
+          // イベントが削除されていた場合の処理
+          alert("このイベントは削除されました。");
+          currentEventId = null;
+          loadMyEvents();
+          showScreen('screen-list');
+          return;
         }
 
-        // 2. モーダル（手動メンバー追加）の処理
-        const addModal = document.getElementById('add-member-modal');
-        document.getElementById('show-add-modal-btn').addEventListener('click', () => {
-            if (!currentEventData) return;
-            document.getElementById('modal-member-name').value = "";
-            if (currentEventData.mode === 'split') {
-                document.getElementById('modal-amount-area').classList.add('hidden');
-            } else {
-                document.getElementById('modal-amount-area').classList.remove('hidden');
-                document.getElementById('modal-amount-input').value = currentEventData.baseAmount;
-            }
-            addModal.classList.remove('hidden');
-        });
+        currentEventData = doc.data();
 
-        document.getElementById('modal-cancel-btn').addEventListener('click', () => {
-            addModal.classList.add('hidden');
-        });
-
-        document.getElementById('modal-save-btn').addEventListener('click', () => {
-            const name = document.getElementById('modal-member-name').value;
-            if (!name) return alert("名前を入力してください");
-
-            const amount = Number(document.getElementById('modal-amount-input').value);
-            const tempId = "manual_" + Date.now(); // 手動追加用の仮ID
-
-            addMemberToDB(tempId, name, amount, null); // アイコンなしで共通処理を呼び出す
-            addModal.classList.add('hidden');
-        });
-
-        // 👇 追加5: LINEボタンが押されたときの処理
-        document.getElementById('add-line-member-btn').addEventListener('click', () => {
-            if (!currentEventData) return;
-
-            // まだLINEにログインしていない場合（パソコンのブラウザで開いた時など）
-            if (!liff.isLoggedIn()) {
-                liff.login(); // LINEのログイン画面を開きます
-                return;
-            }
-
-            // ログイン済みなら、プロフィールを取得する
-            liff.getProfile().then(profile => {
-                const lineId = profile.userId;         // LINEのユーザーID
-                const lineName = profile.displayName;  // LINEの表示名
-                const lineIcon = profile.pictureUrl;   // LINEのアイコン画像URL
-
-                // 基本会費をセット（割り勘モードなら共通処理の中で再計算されます）
-                const amount = currentEventData.baseAmount;
-
-                // 共通処理を使ってデータベースに追加！
-                addMemberToDB(lineId, lineName, amount, lineIcon);
-                alert(`${lineName}さんを参加者として追加しました！`);
-
-            }).catch(err => {
-                console.error("プロフィール取得エラー:", err);
-                alert("LINEプロフィールの取得に失敗しました。");
-            });
-        });
-
-
-        // 3. リアルタイム監視と残金計算（表示部分の改修）
-        function listenToEventChanges() {
-            db.collection("events").doc(currentEventId).onSnapshot((doc) => {
-                currentEventData = doc.data();
-                if (!currentEventData) return;
-
-                document.getElementById('display-event-title').textContent = currentEventData.title;
-                document.getElementById('display-event-date').textContent = currentEventData.date;
-                document.getElementById('display-event-icon').textContent = currentEventData.icon;
-
-                const members = currentEventData.members || [];
-                const memberList = document.getElementById('member-list');
-                memberList.innerHTML = "";
-
-                let targetTotal = currentEventData.mode === 'split'
-                    ? currentEventData.baseAmount
-                    : members.reduce((sum, m) => sum + m.amount, 0);
-
-                const paidTotal = members.filter(m => m.isPaid).reduce((sum, m) => sum + m.amount, 0);
-                const remaining = targetTotal - paidTotal;
-
-                document.getElementById('display-target-amount').textContent = targetTotal.toLocaleString();
-                document.getElementById('display-paid-amount').textContent = paidTotal.toLocaleString();
-                document.getElementById('display-remaining-amount').innerHTML = `${remaining.toLocaleString()}<span class="text-lg">円</span>`;
-
-                const statusBox = document.getElementById('status-box');
-                const remainingLabel = document.getElementById('remaining-label');
-                if (targetTotal > 0 && remaining <= 0) {
-                    statusBox.className = "bg-green-100 p-4 rounded-xl mb-6 border border-green-300 text-center transition-colors duration-500 shadow-inner";
-                    remainingLabel.textContent = "✨ 集金完了！";
-                    document.getElementById('display-remaining-amount').className = "font-bold text-3xl text-green-700 tracking-wider";
-                } else {
-                    statusBox.className = "bg-blue-50 p-4 rounded-xl mb-6 border border-blue-100 text-center transition-colors duration-500 shadow-inner";
-                    remainingLabel.textContent = "残金";
-                    document.getElementById('display-remaining-amount').className = "font-bold text-3xl text-blue-800 tracking-wider";
-                }
-
-                members.forEach((member) => {
-                    const badgeColor = member.isPaid ? "bg-green-500 text-white shadow" : "bg-white text-red-500 border-2 border-red-200";
-                    const badgeText = member.isPaid ? "支払済" : "未払";
-
-                    // 👇 追加6: LINEのアイコン画像がある場合は画像を表示し、無い場合は「👤」を表示する
-                    const iconHtml = member.pictureUrl
-                        ? `<img src="${member.pictureUrl}" alt="icon" class="w-10 h-10 rounded-full object-cover shadow-sm border border-gray-200">`
-                        : `<div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">👤</div>`;
-
-                    const li = document.createElement("li");
-                    li.className = "flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100";
-                    li.innerHTML = `
-                <div class="flex items-center gap-3">
-                  ${iconHtml}
-                  <span class="font-bold text-gray-800 text-lg">${member.name}</span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <span class="font-bold text-gray-700 text-lg">${member.amount.toLocaleString()}円</span>
-                  <button class="status-btn text-sm ${badgeColor} px-4 py-2 rounded-lg font-bold cursor-pointer transition active:scale-95">
-                    ${badgeText}
-                  </button>
-                </div>
-              `;
-
-                    li.querySelector('.status-btn').addEventListener('click', () => {
-                        togglePaymentStatus(member.id, member.isPaid, members);
-                    });
-                    memberList.appendChild(li);
-                });
-            });
+        // 削除ボタンの表示コントロール（自分が作ったイベントの時だけ表示する）
+        if (currentEventData.ownerId === myLineProfile.userId) {
+          document.getElementById('delete-event-btn').classList.remove('hidden');
+        } else {
+          document.getElementById('delete-event-btn').classList.add('hidden');
         }
 
-        function togglePaymentStatus(targetMemberId, currentStatus, currentMembers) {
-            const updatedMembers = currentMembers.map(m =>
-                m.id === targetMemberId ? { ...m, isPaid: !currentStatus } : m
-            );
-            db.collection("events").doc(currentEventId).update({ members: updatedMembers });
+        document.getElementById('display-event-title').textContent = currentEventData.title;
+        document.getElementById('display-event-date').textContent = currentEventData.date;
+        document.getElementById('display-event-icon').textContent = currentEventData.icon;
+
+        const members = currentEventData.members || [];
+        const memberList = document.getElementById('member-list');
+        memberList.innerHTML = "";
+        
+        let targetTotal = currentEventData.mode === 'split' ? currentEventData.baseAmount : members.reduce((sum, m) => sum + m.amount, 0);
+        const paidTotal = members.filter(m => m.isPaid).reduce((sum, m) => sum + m.amount, 0);
+        const remaining = targetTotal - paidTotal;
+
+        document.getElementById('display-target-amount').textContent = targetTotal.toLocaleString();
+        document.getElementById('display-paid-amount').textContent = paidTotal.toLocaleString();
+        document.getElementById('display-remaining-amount').innerHTML = `${remaining.toLocaleString()}<span class="text-lg">円</span>`;
+
+        const statusBox = document.getElementById('status-box');
+        const remainingLabel = document.getElementById('remaining-label');
+        if (targetTotal > 0 && remaining <= 0) {
+          statusBox.className = "bg-green-100 p-4 rounded-xl mb-6 border border-green-300 text-center transition-colors duration-500 shadow-inner";
+          remainingLabel.textContent = "✨ 集金完了！";
+          document.getElementById('display-remaining-amount').className = "font-bold text-3xl text-green-700 tracking-wider";
+        } else {
+          statusBox.className = "bg-blue-50 p-4 rounded-xl mb-6 border border-blue-100 text-center transition-colors duration-500 shadow-inner";
+          remainingLabel.textContent = "残金";
+          document.getElementById('display-remaining-amount').className = "font-bold text-3xl text-blue-800 tracking-wider";
         }
 
-        document.getElementById('back-btn').addEventListener('click', () => {
-            document.getElementById('manage-event-screen').classList.add('hidden');
-            document.getElementById('create-event-screen').classList.remove('hidden');
+        members.forEach((member) => {
+          const badgeColor = member.isPaid ? "bg-green-500 text-white shadow" : "bg-white text-red-500 border-2 border-red-200";
+          const badgeText = member.isPaid ? "支払済" : "未払";
+          const iconHtml = member.pictureUrl 
+            ? `<img src="${member.pictureUrl}" alt="icon" class="w-10 h-10 rounded-full object-cover shadow-sm border border-gray-200">`
+            : `<div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">👤</div>`;
+
+          const li = document.createElement("li");
+          li.className = "flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100";
+          li.innerHTML = `
+            <div class="flex items-center gap-3">
+              ${iconHtml}
+              <span class="font-bold text-gray-800 text-lg">${member.name}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-bold text-gray-700 text-lg">${member.amount.toLocaleString()}円</span>
+              <button class="status-btn text-sm ${badgeColor} px-4 py-2 rounded-lg font-bold cursor-pointer transition">
+                ${badgeText}
+              </button>
+            </div>
+          `;
+          li.querySelector('.status-btn').addEventListener('click', () => togglePaymentStatus(member.id, member.isPaid, members));
+          memberList.appendChild(li);
         });
-    </script>
+      });
+    }
+
+    // --- メンバー追加の共通処理 ---
+    function addMemberToDB(newId, name, amount, pictureUrl = null) {
+      let updatedMembers = [...(currentEventData.members || [])];
+      if (updatedMembers.some(m => m.id === newId)) return alert("すでに参加しています！");
+
+      updatedMembers.push({ id: newId, name: name, amount: amount, isPaid: false, pictureUrl: pictureUrl });
+      if (currentEventData.mode === 'split') {
+        const total = currentEventData.baseAmount;
+        const perPerson = Math.round(total / updatedMembers.length);
+        updatedMembers = updatedMembers.map(m => ({ ...m, amount: perPerson }));
+      }
+      db.collection("events").doc(currentEventId).update({ members: updatedMembers });
+    }
+
+    function togglePaymentStatus(targetMemberId, currentStatus, currentMembers) {
+      const updatedMembers = currentMembers.map(m => m.id === targetMemberId ? { ...m, isPaid: !currentStatus } : m);
+      db.collection("events").doc(currentEventId).update({ members: updatedMembers });
+    }
+
+    // --- 戻るボタン ---
+    document.getElementById('back-to-list-btn').addEventListener('click', () => {
+      if (unsubscribe) unsubscribe(); // 監視をストップ
+      
+      // 共有リンクから直接来た場合はマイページがないのでLINEを閉じるかリロードする
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('eventId')) {
+        // パラメータを消して再読み込みすることで、マイページに行けるようにする
+        window.location.href = window.location.href.split('?')[0]; 
+      } else {
+        loadMyEvents();
+        showScreen('screen-list');
+      }
+    });
+
+    // --- メンバー追加機能（手動とLINE） ---
+    const addModal = document.getElementById('add-member-modal');
+    document.getElementById('show-add-modal-btn').addEventListener('click', () => {
+      document.getElementById('modal-member-name').value = "";
+      if (currentEventData.mode === 'split') {
+        document.getElementById('modal-amount-area').classList.add('hidden');
+      } else {
+        document.getElementById('modal-amount-area').classList.remove('hidden');
+        document.getElementById('modal-amount-input').value = currentEventData.baseAmount;
+      }
+      addModal.classList.remove('hidden');
+    });
+    document.getElementById('modal-cancel-btn').addEventListener('click', () => addModal.classList.add('hidden'));
+    document.getElementById('modal-save-btn').addEventListener('click', () => {
+      const name = document.getElementById('modal-member-name').value;
+      if (!name) return alert("名前を入力してください");
+      addMemberToDB("manual_" + Date.now(), name, Number(document.getElementById('modal-amount-input').value), null);
+      addModal.classList.add('hidden');
+    });
+    document.getElementById('add-line-member-btn').addEventListener('click', () => {
+      addMemberToDB(myLineProfile.userId, myLineProfile.displayName, currentEventData.baseAmount, myLineProfile.pictureUrl);
+      alert(`${myLineProfile.displayName}さんを追加しました！`);
+    });
+
+
+    // ★追加機能1：イベントの削除
+    document.getElementById('delete-event-btn').addEventListener('click', () => {
+      if(confirm("本当にこのイベントを削除しますか？\nこの操作は元に戻せません。")) {
+        db.collection("events").doc(currentEventId).delete().then(() => {
+          alert("削除しました。");
+          // ※削除すると、onSnapshotの機能によって自動的に一覧画面へ戻ります
+        });
+      }
+    });
+
+    // ★追加機能2：共有リンクのコピー
+    document.getElementById('share-btn').addEventListener('click', () => {
+      // 現在のURL（例: https://〇〇.netlify.app）に、?eventId=... をくっつけて特別なURLを作る
+      const baseUrl = window.location.href.split('?')[0];
+      const shareUrl = `${baseUrl}?eventId=${currentEventId}`;
+      
+      // クリップボード（スマホのコピー機能）にコピーする
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        alert("🔗 共有用のリンクをコピーしました！\nLINEのトークなどに貼り付けて送ってください。");
+      }).catch(err => {
+        alert("コピーに失敗しました。下のURLを手動でコピーしてください。\n\n" + shareUrl);
+      });
+    });
+
+  </script>
 
 </body>
 </html>
