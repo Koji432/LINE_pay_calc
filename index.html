@@ -50,8 +50,8 @@
             </div>
 
             <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">日付</label>
-                <input type="date" id="event-date-input" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-gray-700 text-sm font-bold mb-2">日付📅</label>
+                    <input type="date" id="event-date-input" class="w-48 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div class="mb-4">
                 <label class="block text-gray-700 text-sm font-bold mb-2">イベント名</label>
@@ -380,23 +380,27 @@
                         : `<div class="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">👤</div>`;
 
                     const li = document.createElement("li");
-                    li.className = "flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100";
-                    li.innerHTML = `
-                <div class="flex items-center gap-3">
-                  ${iconHtml}
-                  <span class="font-bold text-gray-800 text-lg">${member.name}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <!-- 👇 変更: images.png を参加者の個別削除ボタンに設定 -->
-                  <button class="delete-member-btn px-1 py-1 hover:opacity-70 transition">
-                    <img src="./images.png" class="w-6 h-6 object-contain" alt="削除">
-                  </button>
-                  <span class="font-bold text-gray-700 text-lg ml-1">${member.amount.toLocaleString()}円</span>
-                  <button class="status-btn text-sm ${badgeColor} px-4 py-2 rounded-lg font-bold cursor-pointer transition w-20 text-center">
-                    ${badgeText}
-                  </button>
-                </div>
-              `;
+                      li.className = "flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100";
+                      li.innerHTML = `
+                        <div class="flex items-center gap-3">
+                          ${iconHtml}
+                          <span class="font-bold text-gray-800 text-lg">${member.name}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <!-- ① 金額の表示 -->
+                          <span class="font-bold text-gray-700 text-lg mr-1">${member.amount.toLocaleString()}円</span>
+                          
+                          <!-- ② 支払済/未払 ボタン -->
+                          <button class="status-btn text-sm ${badgeColor} px-4 py-2 rounded-lg font-bold cursor-pointer transition w-20 text-center">
+                            ${badgeText}
+                          </button>
+                          
+                          <!-- ③ 削除ボタン（一番右端に移動しました） -->
+                          <button class="delete-member-btn px-1 py-1 hover:opacity-70 transition ml-1">
+                            <img src="./images.png" class="w-6 h-6 object-contain" alt="削除">
+                          </button>
+                        </div>
+                      `;
 
                     li.querySelector('.status-btn').addEventListener('click', () => {
                         const updated = members.map(m => m.id === member.id ? { ...m, isPaid: !m.isPaid } : m);
