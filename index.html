@@ -113,7 +113,6 @@
                 <div id="display-remaining-amount" class="font-bold text-3xl text-blue-800 tracking-wider">0<span class="text-lg">円</span></div>
             </div>
 
-            <!-- 👇 変更: ご指定の画像(line-me.jpg, share.webp)を全て同じサイズ(w-8 h-8)で配置しました -->
             <div class="flex gap-3 mb-6">
                 <button id="add-line-member-btn" class="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-3 px-1 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 transition">
                     <img src="./line-me.jpg" class="w-8 h-8 object-contain" alt="LINE">
@@ -124,7 +123,6 @@
                     <span class="text-[11px]">リンク共有</span>
                 </button>
                 <button id="show-add-modal-btn" class="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold py-3 px-1 rounded-xl shadow-sm flex flex-col items-center justify-center gap-2 transition">
-                    <!-- 手動追加は統一感を出すために青いプラスアイコンでデザイン -->
                     <div class="w-8 h-8 flex items-center justify-center text-blue-500 text-3xl font-bold pb-1">＋</div>
                     <span class="text-[11px]">手動で追加</span>
                 </button>
@@ -136,16 +134,14 @@
         </div>
     </div>
 
-    <!-- 👇 追加: LINE連携ボタンを押したときの「自分を追加 / 友だち招待」選択モーダル -->
+    <!-- LINE連携ボタンを押したときの「自分を追加 / 友だち招待」選択モーダル -->
     <div id="line-action-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity">
         <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 class="font-bold text-lg mb-6 text-center text-gray-800">LINEから参加・招待</h3>
             <div class="flex flex-col gap-4">
-                <!-- 自分の追加 -->
                 <button id="action-add-self" class="w-full bg-[#06C755] hover:bg-green-600 text-white font-bold py-4 rounded-xl shadow flex justify-center items-center gap-2">
                     🙋‍♂️ 自分を参加者として追加する
                 </button>
-                <!-- 友だちの招待（Share Target Picker） -->
                 <button id="action-invite-friend" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl shadow flex justify-center items-center gap-2">
                     📨 LINEの友だちを招待する
                 </button>
@@ -215,10 +211,40 @@
 
             const params = new URLSearchParams(window.location.search);
             const sharedEventId = params.get('eventId');
+            
+            // 👇 アップデート機能2：共有リンクから来た時の「自動参加」の仕組み
             if (sharedEventId) {
                 currentEventId = sharedEventId;
-                listenToEventChanges();
-                showScreen('screen-manage');
+                
+                // イベントのデータを1回だけ取得して、自分が参加しているかチェックする
+                db.collection("events").doc(currentEventId).get().then((doc) => {
+                    if (doc.exists) {
+                        currentEventData = doc.data(); // データを一時保存
+                        const members = currentEventData.members || [];
+                        
+                        // 自分がすでにリストにいるか確認
+                        const isAlreadyJoined = members.some(m => m.id === myLineProfile.userId);
+                        
+                        if (!isAlreadyJoined) {
+                            // まだ参加していなければ、自動でデータベースに追加する！
+                            let amount = currentEventData.baseAmount;
+                            addMemberToDB(myLineProfile.userId, myLineProfile.displayName, amount, myLineProfile.pictureUrl);
+                            alert("イベントに自動参加しました！");
+                        }
+                        
+                        // 通常通り、リアルタイム監視をスタートして管理画面を表示
+                        listenToEventChanges();
+                        showScreen('screen-manage');
+                    } else {
+                        alert("イベントが見つかりませんでした。");
+                        loadMyEvents();
+                        showScreen('screen-list');
+                    }
+                }).catch(err => {
+                    console.error("イベント取得エラー:", err);
+                    loadMyEvents();
+                    showScreen('screen-list');
+                });
             } else {
                 loadMyEvents();
                 showScreen('screen-list');
@@ -253,7 +279,6 @@
                     </div>
                   </div>
                   <div class="flex gap-4 items-center">
-                    <!-- 👇 変更: images.png をマイページの削除ボタンに設定 -->
                     <button class="delete-event-list-btn p-2 hover:opacity-70 transition">
                       <img src="./images.png" class="w-6 h-6 object-contain" alt="削除">
                     </button>
@@ -387,15 +412,10 @@
                           <span class="font-bold text-gray-800 text-lg">${member.name}</span>
                         </div>
                         <div class="flex items-center gap-2">
-                          <!-- ① 金額の表示 -->
                           <span class="font-bold text-gray-700 text-lg mr-1">${member.amount.toLocaleString()}円</span>
-                          
-                          <!-- ② 支払済/未払 ボタン -->
                           <button class="status-btn text-sm ${badgeColor} px-4 py-2 rounded-lg font-bold cursor-pointer transition w-20 text-center">
                             ${badgeText}
                           </button>
-                          
-                          <!-- ③ 削除ボタン（一番右端に移動しました） -->
                           <button class="delete-member-btn px-1 py-1 hover:opacity-70 transition ml-1">
                             <img src="./images.png" class="w-6 h-6 object-contain" alt="削除">
                           </button>
@@ -418,7 +438,9 @@
 
         function addMemberToDB(newId, name, amount, pictureUrl = null) {
             let updatedMembers = [...(currentEventData.members || [])];
-            if (updatedMembers.some(m => m.id === newId)) return alert("すでに参加しています！");
+            
+            // 既に参加している場合は何もしない（自動参加時の重複エラーを防ぐためアラートを消しています）
+            if (updatedMembers.some(m => m.id === newId)) return;
 
             updatedMembers.push({ id: newId, name: name, amount: amount, isPaid: false, pictureUrl: pictureUrl });
 
@@ -447,7 +469,7 @@
             else { loadMyEvents(); showScreen('screen-list'); }
         });
 
-        // --- ボタンアクション（手動追加・共有） ---
+        // --- ボタンアクション（手動追加） ---
         const addModal = document.getElementById('add-member-modal');
         document.getElementById('show-add-modal-btn').addEventListener('click', () => {
             document.getElementById('modal-member-name').value = "";
@@ -470,18 +492,33 @@
             addModal.classList.add('hidden');
         });
 
+        // 👇 アップデート機能1：「共有ボタン」で直接LINEの送信先を選べるように変更
         document.getElementById('share-btn').addEventListener('click', () => {
             const baseUrl = window.location.href.split('?')[0];
             const shareUrl = `${baseUrl}?eventId=${currentEventId}`;
-            navigator.clipboard.writeText(shareUrl).then(() => {
-                alert("🔗 共有用のリンクをコピーしました！\nLINEのトークなどに貼り付けて送ってください。");
-            }).catch(() => alert("コピーに失敗しました。\n\n" + shareUrl));
+            const messageText = `「${currentEventData.title}」の集金メンバーに招待されました！\n以下のリンクから参加してください。\n\n${shareUrl}`;
+
+            // スマホのLINEアプリで開いている場合は、送信先を選ぶ画面を起動
+            if (liff.isApiAvailable('shareTargetPicker')) {
+                liff.shareTargetPicker([
+                    { type: "text", text: messageText }
+                ]).then((res) => {
+                    if (res) alert("招待メッセージを送信しました！");
+                }).catch(err => {
+                    console.error("送信エラー:", err);
+                    alert("招待メッセージの送信に失敗しました。");
+                });
+            } else {
+                // PCブラウザ等の場合は、今まで通りリンクをコピーする親切設計
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    alert("🔗 共有用のリンクをコピーしました！\nLINEのトークなどに貼り付けて送ってください。");
+                }).catch(() => alert("コピーに失敗しました。\n\n" + shareUrl));
+            }
         });
 
-        // 👇 追加: LINE連携機能（自分を追加 ＆ 友だち招待）
+        // --- LINE連携機能（自分を追加 ＆ 友だち招待） ---
         const lineActionModal = document.getElementById('line-action-modal');
 
-        // LINE連携ボタンを押すと、どちらのアクションをするか選ぶモーダルを開く
         document.getElementById('add-line-member-btn').addEventListener('click', () => {
             lineActionModal.classList.remove('hidden');
         });
@@ -490,7 +527,6 @@
             lineActionModal.classList.add('hidden');
         });
 
-        // アクション1：自分を追加する
         document.getElementById('action-add-self').addEventListener('click', () => {
             let amount = currentEventData.baseAmount;
             addMemberToDB(myLineProfile.userId, myLineProfile.displayName, amount, myLineProfile.pictureUrl);
@@ -498,22 +534,16 @@
             lineActionModal.classList.add('hidden');
         });
 
-        // アクション2：LINEの友だちを招待する（メッセージ送信）
         document.getElementById('action-invite-friend').addEventListener('click', () => {
             if (!liff.isApiAvailable('shareTargetPicker')) {
-                alert("開発中です。ごめんね。");
+                alert("パソコン等では使用できません。「リンク共有」ボタンをご利用ください。");
                 return;
             }
-
             const baseUrl = window.location.href.split('?')[0];
             const shareUrl = `${baseUrl}?eventId=${currentEventId}`;
             const messageText = `「${currentEventData.title}」の集金メンバーに招待されました！\n以下のリンクから参加してください。\n\n${shareUrl}`;
 
-            // LINE公式のShare Target Pickerを起動し、メッセージを送信させる
-            liff.shareTargetPicker([{
-                "type": "text",
-                "text": messageText
-            }]).then((res) => {
+            liff.shareTargetPicker([{ type: "text", text: messageText }]).then((res) => {
                 if (res) alert("招待メッセージを送信しました！");
                 lineActionModal.classList.add('hidden');
             }).catch(err => {
