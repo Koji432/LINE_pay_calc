@@ -492,13 +492,12 @@
             addModal.classList.add('hidden');
         });
 
-        // 👇 アップデート機能1：「共有ボタン」で直接LINEの送信先を選べるように変更
+        // 👇 修正箇所1：「共有ボタン」のURLをLINE公式のLIFF URLに変更
         document.getElementById('share-btn').addEventListener('click', () => {
-            const baseUrl = window.location.href.split('?')[0];
-            const shareUrl = `${baseUrl}?eventId=${currentEventId}`;
+            // 以前の baseUrl = ... を消して、直接 LIFF URL を作ります
+            const shareUrl = `https://liff.line.me/${liffId}?eventId=${currentEventId}`;
             const messageText = `「${currentEventData.title}」の集金メンバーに招待されました！\n以下のリンクから参加してください。\n\n${shareUrl}`;
 
-            // スマホのLINEアプリで開いている場合は、送信先を選ぶ画面を起動
             if (liff.isApiAvailable('shareTargetPicker')) {
                 liff.shareTargetPicker([
                     { type: "text", text: messageText }
@@ -509,7 +508,6 @@
                     alert("招待メッセージの送信に失敗しました。");
                 });
             } else {
-                // PCブラウザ等の場合は、今まで通りリンクをコピーする親切設計
                 navigator.clipboard.writeText(shareUrl).then(() => {
                     alert("🔗 共有用のリンクをコピーしました！\nLINEのトークなどに貼り付けて送ってください。");
                 }).catch(() => alert("コピーに失敗しました。\n\n" + shareUrl));
@@ -534,13 +532,15 @@
             lineActionModal.classList.add('hidden');
         });
 
+        // 👇 修正箇所2：「友だちを招待する」モーダル内のURLもLIFF URLに変更
         document.getElementById('action-invite-friend').addEventListener('click', () => {
             if (!liff.isApiAvailable('shareTargetPicker')) {
                 alert("パソコン等では使用できません。「リンク共有」ボタンをご利用ください。");
                 return;
             }
-            const baseUrl = window.location.href.split('?')[0];
-            const shareUrl = `${baseUrl}?eventId=${currentEventId}`;
+
+            // ここも LIFF URL に書き換えます
+            const shareUrl = `https://liff.line.me/${liffId}?eventId=${currentEventId}`;
             const messageText = `「${currentEventData.title}」の集金メンバーに招待されました！\n以下のリンクから参加してください。\n\n${shareUrl}`;
 
             liff.shareTargetPicker([{ type: "text", text: messageText }]).then((res) => {
